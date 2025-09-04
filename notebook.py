@@ -38,7 +38,7 @@ def __(pd, nussgipfel, weather):
     
     # Merge with sales data
     merged = pd.merge(nussgipfel, weather_relevant, on='date', how='inner')
-    
+
     print(f"Merged dataset shape: {merged.shape}")
     print(f"Date range: {merged['date'].min()} to {merged['date'].max()}")
     print("\nSelected weather variables:")
@@ -49,8 +49,35 @@ def __(pd, nussgipfel, weather):
     print("- humidity: Relative humidity (%)")
     print("\nMerged data sample:")
     print(merged.head())
-    
+
     return merged
+
+
+@app.cell
+def __(merged):
+    # Simple correlation analysis: Do weather variables correlate with nussgipfel sales?
+    print("CORRELATION ANALYSIS")
+    print("=" * 40)
+
+    # Calculate correlations between amount (sales) and weather variables
+    weather_cols = ['avg_temp', 'precipitation', 'sunshine_duration', 'cloud_coverage', 'humidity']
+
+    print("Correlation between nussgipfel sales (amount) and weather:")
+    for col in weather_cols:
+        # Skip if column has missing data (marked as '-')
+        if merged[col].dtype == 'object':
+            print(f"{col:20}: Skipped (contains non-numeric data)")
+            continue
+
+        corr = merged['amount'].corr(merged[col])
+        print(f"{col:20}: {corr:6.3f}")
+    
+    print("\nInterpretation:")
+    print("- Values close to +1: Strong positive correlation")
+    print("- Values close to -1: Strong negative correlation") 
+    print("- Values close to  0: No correlation")
+    
+    return
 
 
 if __name__ == "__main__":
