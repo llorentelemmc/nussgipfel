@@ -22,7 +22,7 @@ def __(pd):
     nussgipfel = pd.read_csv('data/sales/nussgipfel.csv', date_format="%Y-%m-%d", parse_dates=['date'])
     
     # Import weather data with proper date parsing and separator
-    weather = pd.read_csv('data/climate/nbcn-daily_BER_previous.csv', sep=';', date_format="%Y%m%d", parse_dates=['date'])
+    weather = pd.read_csv('data/climate/nbcn-daily_BER_previous.csv', sep=';', date_format="%Y%m%d", parse_dates=['date'], na_values='-')
     
     return nussgipfel, weather
 
@@ -31,10 +31,15 @@ def __(pd):
 def __(pd, nussgipfel, weather):
     # Select weather variables most likely to correlate with pastry sales
     # Based on the documentation in 1_how-to-download-nbcn-d.txt
-    weather_relevant = weather[['date', 'tre200d0', 'rre150d0', 'sre000d0', 'nto000d0', 'ure200d0']].copy()
+    weather_relevant = weather[['date', 'tre200d0', 'rre150d0', 'sre000d0', 'ure200d0']].copy()
     
     # Rename columns to be more readable
-    weather_relevant.columns = ['date', 'avg_temp', 'precipitation', 'sunshine_duration', 'cloud_coverage', 'humidity']
+    weather_relevant.columns = ['date', 'avg_temp', 'precipitation', 'sunshine_duration', 'humidity']
+    
+    # Clean the data: convert '-' to NaN and then to numeric
+    weather_cols = ['avg_temp', 'precipitation', 'sunshine_duration', 'humidity']
+    for col in weather_cols:
+        weather_relevant[col] = pd.to_numeric(weather_relevant[col], errors='coerce')
     
     # Merge with sales data
     merged = pd.merge(nussgipfel, weather_relevant, on='date', how='inner')
@@ -45,8 +50,8 @@ def __(pd, nussgipfel, weather):
     print("- avg_temp: Average temperature (°C)")
     print("- precipitation: Daily rainfall (mm)")
     print("- sunshine_duration: Sunshine duration (minutes)")
-    print("- cloud_coverage: Cloud coverage (%)")
     print("- humidity: Relative humidity (%)")
+    print("\nData cleaning applied: '-' values converted to NaN")
     print("\nMerged data sample:")
     print(merged.head())
 
@@ -60,23 +65,18 @@ def __(merged):
     print("=" * 40)
 
     # Calculate correlations between amount (sales) and weather variables
-    weather_cols = ['avg_temp', 'precipitation', 'sunshine_duration', 'cloud_coverage', 'humidity']
+    weather_variables = ['avg_temp', 'precipitation', 'sunshine_duration', 'humidity']
 
     print("Correlation between nussgipfel sales (amount) and weather:")
-    for col in weather_cols:
-        # Skip if column has missing data (marked as '-')
-        if merged[col].dtype == 'object':
-            print(f"{col:20}: Skipped (contains non-numeric data)")
-            continue
+    for variable in weather_variables:
+        corr = merged['amount'].corr(merged[variable])
+        print(f"{variable:20}: {corr:6.3f}")
 
-        corr = merged['amount'].corr(merged[col])
-        print(f"{col:20}: {corr:6.3f}")
-    
     print("\nInterpretation:")
     print("- Values close to +1: Strong positive correlation")
-    print("- Values close to -1: Strong negative correlation") 
+    print("- Values close to -1: Strong negative correlation")
     print("- Values close to  0: No correlation")
-    
+
     return
 
 
