@@ -80,5 +80,93 @@ def __(merged):
     return
 
 
+@app.cell
+def __(merged, pd):
+    # Create a weather goodness score (1-10) based on intuitive weather quality
+    print("CREATING WEATHER GOODNESS SCORE")
+    print("="*40)
+    
+    df_weather = merged.copy()
+    
+    # Define what makes "good weather" for each variable
+    # Temperature: 15-25°C is ideal (comfortable for walking/shopping)
+    temp_ideal = 20  # ideal temperature
+    temp_range = 10  # acceptable range around ideal
+    temp_score = 1 - abs(df_weather['avg_temp'] - temp_ideal) / temp_range
+    temp_score = temp_score.clip(0, 1)  # keep between 0-1
+    
+    # Sunshine: more minutes = better (normalize to max observed)
+    sunshine_score = df_weather['sunshine_duration'] / df_weather['sunshine_duration'].max()
+    
+    # Precipitation: less rain = better (0mm = perfect, normalize to reasonable max)
+    precip_max = 20  # anything above 20mm is considered very rainy
+    precip_score = 1 - (df_weather['precipitation'] / precip_max).clip(0, 1)
+    
+    # Humidity: 40-60% is comfortable, too high or low is bad
+    humidity_ideal = 50
+    humidity_range = 30
+    humidity_score = 1 - abs(df_weather['humidity'] - humidity_ideal) / humidity_range
+    humidity_score = humidity_score.clip(0, 1)
+    
+    # Combine with intuitive weights (you can adjust these)
+    weights = {
+        'sunshine': 0.4,      # Most important - sunny days encourage outings
+        'temperature': 0.3,   # Important - comfortable temperature
+        'precipitation': 0.2, # Important - no rain
+        'humidity': 0.1       # Less important - comfort factor
+    }
+    
+    weather_goodness = (
+        weights['sunshine'] * sunshine_score +
+        weights['temperature'] * temp_score +
+        weights['precipitation'] * precip_score +
+        weights['humidity'] * humidity_score
+    )
+    
+    # Scale to 1-10
+    weather_goodness_score = 1 + 9 * weather_goodness
+    
+    df_weather['weather_goodness'] = weather_goodness_score
+    
+    print("Weights used:")
+    for key, value in weights.items():
+        print(f"  {key}: {value}")
+    
+    print(f"\nWeather Goodness Score range: {weather_goodness_score.min():.1f} to {weather_goodness_score.max():.1f}")
+    print(f"Weather Goodness Score mean: {weather_goodness_score.mean():.1f}")
+    
+    # Correlation with sales
+    goodness_corr = merged['amount'].corr(weather_goodness_score)
+    print(f"\nCORRELATION: Weather Goodness vs Nussgipfel Sales: {goodness_corr:.3f}")
+    
+    print(f"\nSample data:")
+    print(df_weather[['date', 'amount', 'avg_temp', 'sunshine_duration', 'precipitation', 'humidity', 'weather_goodness']].head())
+    
+    return df_weather, weather_goodness_score
+
+
+@app.cell
+def __(df_weather):
+    # Enhanced data table with weather goodness score
+    print("ENHANCED DATA WITH WEATHER GOODNESS SCORE")
+    print("="*50)
+    
+    # Select relevant columns for display
+    enhanced_data = df_weather[['id', 'date', 'article', 'amount', 'avg_temp', 'precipitation', 'sunshine_duration', 'humidity', 'weather_goodness']].copy()
+    
+    # Round weather goodness for cleaner display
+    enhanced_data['weather_goodness'] = enhanced_data['weather_goodness'].round(1)
+    
+    print("Enhanced merged data sample:")
+    print(enhanced_data.head())
+    
+    print(f"\nData summary:")
+    print(f"Total records: {len(enhanced_data)}")
+    print(f"Weather goodness range: {enhanced_data['weather_goodness'].min():.1f} - {enhanced_data['weather_goodness'].max():.1f}")
+    print(f"Average weather goodness: {enhanced_data['weather_goodness'].mean():.1f}")
+    
+    return enhanced_data
+
+
 if __name__ == "__main__":
     app.run()
