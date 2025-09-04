@@ -7,6 +7,12 @@ app = marimo.App(width="medium")
 @app.cell
 def __():
     import pandas as pd
+    
+    # Set pandas display options for better table formatting
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', None)
+    pd.set_option('display.max_colwidth', 20)
+    
     return pd,
 
 
