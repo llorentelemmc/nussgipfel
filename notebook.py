@@ -168,5 +168,53 @@ def __(df_weather):
     return enhanced_data
 
 
+@app.cell
+def __(enhanced_data):
+    import matplotlib.pyplot as plt
+
+    # Create a cleaner chart with normalized values and monthly averages
+    print("CLEAN COMPARISON: NUSSGIPFEL SALES & WEATHER GOODNESS")
+    print("="*55)
+    
+    # Create monthly averages for smoother visualization
+    monthly_data = enhanced_data.copy()
+    monthly_data['year_month'] = monthly_data['date'].dt.to_period('M')
+    monthly_avg = monthly_data.groupby('year_month').agg({
+        'amount': 'mean',
+        'weather_goodness': 'mean'
+    }).reset_index()
+    monthly_avg['date'] = monthly_avg['year_month'].dt.to_timestamp()
+    
+    # Normalize both metrics to 0-100 scale for comparison
+    sales_norm = ((monthly_avg['amount'] - monthly_avg['amount'].min()) / 
+                  (monthly_avg['amount'].max() - monthly_avg['amount'].min())) * 100
+    
+    weather_norm = ((monthly_avg['weather_goodness'] - monthly_avg['weather_goodness'].min()) / 
+                    (monthly_avg['weather_goodness'].max() - monthly_avg['weather_goodness'].min())) * 100
+    
+    # Create the chart
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    ax.plot(monthly_avg['date'], sales_norm, 'b-', label='Nussgipfel Sales (normalized)', linewidth=3, marker='o', markersize=4)
+    ax.plot(monthly_avg['date'], weather_norm, 'r-', label='Weather Goodness (normalized)', linewidth=3, marker='s', markersize=4)
+    
+    ax.set_xlabel('Date', fontsize=12)
+    ax.set_ylabel('Normalized Value (0-100)', fontsize=12)
+    ax.set_title('Monthly Averages: Nussgipfel Sales vs Weather Goodness\n(Both normalized to 0-100 scale)', fontsize=14)
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+    
+    # Show correlation on monthly data
+    monthly_corr = monthly_avg['amount'].corr(monthly_avg['weather_goodness'])
+    print(f"\nMonthly correlation: {monthly_corr:.3f}")
+    print(f"Original daily correlation: {enhanced_data['amount'].corr(enhanced_data['weather_goodness']):.3f}")
+    
+    return monthly_avg
+
+
 if __name__ == "__main__":
     app.run()
