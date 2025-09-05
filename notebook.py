@@ -142,6 +142,11 @@ def _(df_weather):
 
 
 @app.cell
+def _():
+    return
+
+
+@app.cell
 def _(enhanced_data):
     # WEATHER vs NUSSGIPFEL SALES: CORRELATION ANALYSIS
     print("WEATHER vs NUSSGIPFEL SALES: CORRELATION ANALYSIS")
@@ -162,20 +167,20 @@ def _(enhanced_data):
     }).reset_index()
     monthly_correlation = corr_monthly_avg['amount'].corr(corr_monthly_avg['weather_goodness'])
 
-    print("CORRELATIONS:")
-    print(f"Daily correlation:   {daily_correlation:.3f}")
-    print(f"Monthly correlation: {monthly_correlation:.3f}")
+    print("CORRELATION COEFFICIENTS:")
+    print(f"Daily:   {daily_correlation:.3f}")
+    print(f"Monthly: {monthly_correlation:.3f}")
     print()
 
-    print("EXPLANATION:")
-    print("• Daily correlation: Compares weather goodness vs sales on individual days")
-    print("  - Measures immediate weather impact (e.g., rainy Tuesday vs sunny Tuesday)")
-    print("  - Includes daily noise (weekends, holidays, random events)")
+    print("Daily correlation coefficient: 0.267")
+    print("This is a weak to moderate positive correlation")
+    print("On any given day, there's a weak tendency for better weather to coincide with higher sales")
+    print("Only explains about 7% of the variance (0.267² ≈ 0.07)")
     print()
-    print("• Monthly correlation: Compares average weather vs average sales by month")
-    print("  - Measures seasonal patterns (e.g., sunny July vs rainy January)")
-    print("  - Smooths out daily noise, reveals longer-term trends")
-    print("  - Shows if months with better weather generally have higher sales")
+    print("Monthly correlation coefficient: 0.517")
+    print("This is a moderate to strong positive correlation")
+    print("When you average out daily fluctuations to monthly patterns, the weather-sales relationship becomes much clearer")
+    print("Explains about 27% of the variance (0.517² ≈ 0.27)")
     print()
 
     # Interpret the stronger correlation
@@ -237,7 +242,6 @@ def _(enhanced_data):
 
     print(f"Best weather days (avg score {best_weather['weather_goodness'].mean():.1f}): avg sales = {best_weather['amount'].mean():.1f}")
     print(f"Worst weather days (avg score {worst_weather['weather_goodness'].mean():.1f}): avg sales = {worst_weather['amount'].mean():.1f}")
-
     return
 
 
@@ -264,21 +268,128 @@ def _(enhanced_data):
                     (monthly_avg['weather_goodness'].max() - monthly_avg['weather_goodness'].min())) * 100
 
     # Create the chart
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(12, 6))
+    import matplotlib.pyplot as viz_plt
+    viz_fig, viz_ax = viz_plt.subplots(figsize=(12, 6))
 
-    ax.plot(monthly_avg['date'], sales_norm, 'b-', label='Nussgipfel Sales (normalized)', linewidth=3, marker='o', markersize=4)
-    ax.plot(monthly_avg['date'], weather_norm, 'r-', label='Weather Goodness (normalized)', linewidth=3, marker='s', markersize=4)
+    viz_ax.plot(monthly_avg['date'], sales_norm, 'b-', label='Nussgipfel Sales (normalized)', linewidth=3, marker='o', markersize=4)
+    viz_ax.plot(monthly_avg['date'], weather_norm, 'r-', label='Weather Goodness (normalized)', linewidth=3, marker='s', markersize=4)
 
-    ax.set_xlabel('Date', fontsize=12)
-    ax.set_ylabel('Normalized Value (0-100)', fontsize=12)
-    ax.set_title('Monthly Averages: Nussgipfel Sales vs Weather Goodness\n(Both normalized to 0-100 scale)', fontsize=14)
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
+    viz_ax.set_xlabel('Date', fontsize=12)
+    viz_ax.set_ylabel('Normalized Value (0-100)', fontsize=12)
+    viz_ax.set_title('Monthly Averages: Nussgipfel Sales vs Weather Goodness\n(Both normalized to 0-100 scale)', fontsize=14)
+    viz_ax.legend(fontsize=11)
+    viz_ax.grid(True, alpha=0.3)
 
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
+    viz_plt.xticks(rotation=45)
+    viz_plt.tight_layout()
+    viz_plt.show()
+    return
+
+
+@app.cell
+def _(enhanced_data):
+    import numpy as np
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import r2_score
+
+    # MONTH-BASED SALES FORECASTING MODEL
+    print("MONTH-BASED SALES FORECASTING MODEL")
+    print("=" * 40)
+
+    # Prepare monthly data for modeling
+    pred_monthly_data = enhanced_data.copy()
+    pred_monthly_data['year_month'] = pred_monthly_data['date'].dt.to_period('M')
+    pred_monthly_data['month'] = pred_monthly_data['date'].dt.month
+    pred_monthly_data['year'] = pred_monthly_data['date'].dt.year
+
+    pred_monthly_avg = pred_monthly_data.groupby(['year_month', 'month', 'year']).agg({
+        'amount': 'mean',
+        'weather_goodness': 'mean'
+    }).reset_index()
+    pred_monthly_avg['date'] = pred_monthly_avg['year_month'].dt.to_timestamp()
+
+    # Create month dummy variables (one-hot encoding)
+    month_dummies = np.zeros((len(pred_monthly_avg), 12))
+    for i, month in enumerate(pred_monthly_avg['month']):
+        month_dummies[i, month - 1] = 1  # month-1 because months are 1-12, array is 0-11
+
+    # Prepare features: months + year trend
+    years_since_start = pred_monthly_avg['year'] - pred_monthly_avg['year'].min()
+    X = np.column_stack([month_dummies, years_since_start])
+    y = pred_monthly_avg['amount'].values
+
+    # Fit linear regression model
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # Make predictions
+    y_pred = model.predict(X)
+    pred_monthly_avg['predicted_sales'] = y_pred
+
+    # Calculate model performance
+    r2 = r2_score(y, y_pred)
+
+    print(f"Model Performance:")
+    print(f"R² Score: {r2:.3f} ({r2 * 100:.1f}% of variance explained)")
+    print()
+
+    # Show seasonal effects
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    print("Seasonal Effects (relative to baseline):")
+    for i, month_name in enumerate(month_names):
+        effect = model.coef_[i]
+        print(f"{month_name}: {effect:+.1f} sales")
+
+    print()
+    year_trend = model.coef_[-1]  # Last coefficient is year trend
+    print(f"Year-over-year growth: {year_trend:+.1f} sales per year")
+    return (pred_monthly_avg,)
+
+
+@app.cell
+def _(enhanced_data, pred_monthly_avg):
+    # Create a cleaner chart with normalized values and monthly averages
+    print("MONTHLY SALES: ACTUAL vs SEASONAL FORECAST MODEL")
+    print("="*55)
+
+    # Create monthly averages for smoother visualization
+    final_monthly_data = enhanced_data.copy()
+    final_monthly_data['year_month'] = final_monthly_data['date'].dt.to_period('M')
+    final_monthly_avg = final_monthly_data.groupby('year_month').agg({
+        'amount': 'mean',
+        'weather_goodness': 'mean'
+    }).reset_index()
+    final_monthly_avg['date'] = final_monthly_avg['year_month'].dt.to_timestamp()
+
+    # Normalize sales for comparison (both actual and predicted on same scale)
+    final_sales_norm = ((final_monthly_avg['amount'] - final_monthly_avg['amount'].min()) / 
+                       (final_monthly_avg['amount'].max() - final_monthly_avg['amount'].min())) * 100
+
+    # Normalize predicted sales using the same scale as actual sales
+    final_pred_norm = ((pred_monthly_avg['predicted_sales'] - final_monthly_avg['amount'].min()) / 
+                      (final_monthly_avg['amount'].max() - final_monthly_avg['amount'].min())) * 100
+
+    # Create the chart
+    import matplotlib.pyplot as final_plt
+    import matplotlib.dates as mdates
+    final_fig, final_ax = final_plt.subplots(figsize=(12, 6))
+
+    final_ax.plot(final_monthly_avg['date'], final_sales_norm, 'b-', label='Actual Sales', linewidth=3, marker='o', markersize=4)
+    final_ax.plot(pred_monthly_avg['date'], final_pred_norm, 'g--', label='Seasonal Forecast Model', linewidth=3, marker='^', markersize=4)
+
+    final_ax.set_xlabel('Date', fontsize=12)
+    final_ax.set_ylabel('Normalized Sales (0-100)', fontsize=12)
+    final_ax.set_title('Monthly Sales: Actual vs Seasonal Forecast Model\n(Predictions based on month + year trend)', fontsize=14)
+    final_ax.legend(fontsize=11)
+    final_ax.grid(True, alpha=0.3)
+
+    # Format x-axis to show month and year
+    final_ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    final_ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))  # Show every 2 months
+    final_plt.xticks(rotation=45)
+    final_plt.tight_layout()
+    final_plt.show()
     return
 
 
